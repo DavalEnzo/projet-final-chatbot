@@ -7,6 +7,8 @@ from pyspark.sql.types import StringType, StructField, StructType
 spark = SparkSession \
     .builder \
     .appName("KafkaSparkStreaming") \
+    .config("hive.metastore.uris", "thrift://hive-metastore:9083") \
+    .config("hive.metastore.warehouse.dir", "/user/hive/warehouse") \
     .enableHiveSupport() \
     .getOrCreate()
 
