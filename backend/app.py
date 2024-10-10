@@ -1,10 +1,17 @@
 from flask import Flask, request, jsonify
 import joblib
+from kafka import KafkaProducer
+from marshmallow import Schema, fields
+import json
 app = Flask(__name__)
+
+producer = KafkaProducer(
+    bootstrap_servers='kafka:9092',
+    value_serializer=lambda v: json.dumps(v).encode('utf-8')
+)
 
 fModel2 = './mon_modele_test2.pkl'
 fModel1 = './mon_modele.pkl'
-
 
 isModel1 = True
 
@@ -45,37 +52,46 @@ joblib.dump(vecteurizer1, fVecteur1)
 
 joblib.dump(vecteurizer2, fVecteur2)
 
+class MessageSchema(Schema):
+    message = fields.Str(required=True)
+
+message_schema = MessageSchema()
+
 # Route POST
 @app.route('/api/data', methods=['POST'])
 def post_data():
     data = request.get_json()
-    nouvelle_phrase = data['message']
-    vecteur_entree1 = vecteurizer1.transform([nouvelle_phrase])
-    prediction1 = model1.predict(vecteur_entree1)
+    try:
+        nouvelle_phrase = data['message']
+        vecteur_entree1 = vecteurizer1.transform([nouvelle_phrase])
+        prediction1 = model1.predict(vecteur_entree1)
 
-    vecteur_entree2 = vecteurizer2.transform([nouvelle_phrase])
-    prediction2 = model2.predict(vecteur_entree2)
+        vecteur_entree2 = vecteurizer2.transform([nouvelle_phrase])
+        prediction2 = model2.predict(vecteur_entree2)
 
-    print(prediction1, prediction2)
-    value = 0
-    if (prediction1[0] != 0 and prediction2[0] != 0) :
-        valeurBinaire = str('{:06b}'.format(prediction1[0]))[2:]
-        typologie = decodeurBinaire(valeurBinaire)
-        value = "1"
-    elif (prediction1[0] == 0 and prediction2[0] == 0) :
-        typologie = "vos propos sont approprié"
-        value = "0"
-    elif (prediction1[0] != 0 and prediction2[0] == 0) :
-        typologie = "vos propos sont approprié"
-        value = "0"
-    elif (prediction1[0] == 0 and prediction2[0] != 0):
-        typologie = "vos propos sont approprié"
-        value = "0"
+        print(prediction1, prediction2)
+        value = 0
+        if (prediction1[0] != 0 and prediction2[0] != 0) :
+            valeurBinaire = str('{:06b}'.format(prediction1[0]))[2:]
+            typologie = decodeurBinaire(valeurBinaire)
+            value = "1"
+        elif (prediction1[0] == 0 and prediction2[0] == 0) :
+            typologie = "vos propos sont approprié"
+            value = "0"
+        elif (prediction1[0] != 0 and prediction2[0] == 0) :
+            typologie = "vos propos sont approprié"
+            value = "0"
+        elif (prediction1[0] == 0 and prediction2[0] != 0):
+            typologie = "vos propos sont approprié"
+            value = "0"
 
-    if data:
-        return jsonify({'message':typologie, 'value': value})
-    else:
-        return jsonify({'message': 'Erreur : Aucune donnée POST n\'a été fournie.'}), 400
+        reponse = {'message': typologie, 'value': value}
+
+        producer.send('topic1', reponse)
+        producer.flush()
+        return jsonify(reponse)
+    except Exception as e:
+        return jsonify({'message': 'Erreur lors de la prédiction', 'error': str(e)})
 
 
 if __name__ == '__main__':
