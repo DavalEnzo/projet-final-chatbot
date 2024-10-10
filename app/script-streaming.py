@@ -4,10 +4,11 @@ from pyspark.sql import SparkSession
 from pyspark.sql.functions import col, from_json, struct, to_json
 from pyspark.sql.types import StringType, StructField, StructType
 
-# 1. Initialisation de la session Spark
+# 1. Initialisation de la session Spark avec support pour Hive
 spark = SparkSession \
     .builder \
     .appName("KafkaSparkStreaming") \
+    .enableHiveSupport() \
     .getOrCreate()
 
 # Configuration des logs
@@ -28,10 +29,10 @@ df_kafka = spark \
 # Les données de Kafka sont en binaire, il faut donc les convertir en String
 df_kafka = df_kafka.selectExpr("CAST(value AS STRING) as value")
 
-# 4. Définir le schéma du message Kafka si nécessaire (facultatif)
+# 4. Définir le schéma du message Kafka (facultatif)
 # Supposons que les messages soient sous forme: {"typologie": "...", "value": "..."}
 schema = StructType([
-    StructField("typologie", StringType(), True),
+    StructField("message", StringType(), True),
     StructField("value", StringType(), True)
 ])
 
@@ -40,26 +41,22 @@ df_parsed = df_kafka.withColumn("jsonData", from_json(col("value"), schema)).sel
 
 # 6. Transformation des données dans le format désiré jsonify({'message': typologie, 'value': value})
 # Ajouter le champ 'message' qui est égal à 'typologie'
-df_transformed = df_parsed.withColumn("message", col("typologie"))
+df_transformed = df_parsed.withColumn("message", col("message"))
 
-# Reformater les colonnes dans un format JSON: jsonify({'message':typologie, 'value': value})
-df_jsonified = df_transformed.select(to_json(struct(col("message"), col("value"))).alias("jsonified_data"))
+# Reformater les colonnes dans un format JSON: jsonify({'message': typologie, 'value': value})
+df_jsonified = df_transformed.select(col("message"), col("value"))
 
-# 7. Écriture des résultats (dans la console ou dans un autre système)
-# Ici, on affiche simplement les résultats dans la console
+# 7. Écriture des données dans Hive
+# Création d'une table Hive (si elle n'existe pas déjà)
+spark.sql("CREATE TABLE IF NOT EXISTS kafka_data (message STRING, value STRING) STORED AS PARQUET")
+
+# Écriture continue des données dans la table Hive
 query = df_jsonified.writeStream \
     .outputMode("append") \
-    .format("console") \
-    .start()
-
-# Pour écrire dans un autre Kafka topic, par exemple:
-# query = df_jsonified \
-#    .selectExpr("CAST(jsonified_data AS STRING) as value") \
-#    .writeStream \
-#    .format("kafka") \
-#    .option("kafka.bootstrap.servers", kafka_bootstrap_servers) \
-#    .option("topic", "output_topic") \
-#    .start()
+    .format("hive") \
+    .option("checkpointLocation", "/tmp/checkpoints") \
+    .option("path", "/user/hive/warehouse/kafka_data") \
+    .toTable("kafka_data")  # Nom de la table Hive
 
 # 8. Attendre que la stream finisse
 query.awaitTermination()
