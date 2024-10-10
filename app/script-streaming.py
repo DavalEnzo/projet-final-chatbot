@@ -2,13 +2,12 @@ from pyhive import hive
 from pyspark.sql import SparkSession
 from pyspark.sql.functions import col, from_json, struct, to_json
 from pyspark.sql.types import StringType, StructField, StructType
+import json
 
 # 1. Initialisation de la session Spark
 spark = SparkSession \
     .builder \
     .appName("KafkaSparkStreaming") \
-    .config("hive.metastore.uris", "thrift://hive-metastore:9083") \
-    .config("hive.metastore.warehouse.dir", "/user/hive/warehouse") \
     .enableHiveSupport() \
     .getOrCreate()
 
@@ -61,38 +60,24 @@ cursor.execute(create_table_query)
 
 insert_query = "INSERT INTO comments (message, value) VALUES (%s, %s)"
 
-# 4. Écriture du flux Kafka dans Hive
-
-# Afficher les données du flux Kafka
-query = df_kafka \
-     .writeStream \
-     .outputMode("append") \
-     .format("console") \
-     .start()
-
-
 def insert_into_hive_table(message, value):
-    print(f"Inserting message: {message} with value: {value} into Hive table")
     if message is not None and value is not None:
         cursor.execute(insert_query, (message, value))
 
 def insert_batch(batch_df, batch_id):
-    print(f"Inserting batch: {batch_id} into Hive :")
-    print(batch_df.show())
     if batch_df.count() > 0:
-        batch_df.foreach(lambda row: insert_into_hive_table(row.message, row.value))
-
+        for row in batch_df.collect():
+            jsonified_data = row['jsonified_data']
+            data_dict = json.loads(jsonified_data)
+            insert_into_hive_table(data_dict['message'], data_dict['value'])
 
 query = df_jsonified \
     .writeStream \
+    .format("hive") \
     .foreachBatch(lambda batch_df, batch_id: insert_batch(batch_df, batch_id)) \
     .start()
-
 
 # 9. Attente de la terminaison du streaming
 query.awaitTermination()
 
 print("User data inserted successfully into Hive table.")
-
-
-
