@@ -56,7 +56,6 @@ CREATE TABLE IF NOT EXISTS comments (
 )
 STORED AS PARQUET
 """
-cursor.execute(create_table_query)
 
 insert_query = "INSERT INTO comments (message, value) VALUES (%s, %s)"
 
@@ -65,6 +64,7 @@ def insert_into_hive_table(message, value):
         cursor.execute(insert_query, (message, value))
 
 def insert_batch(batch_df, batch_id):
+    cursor.execute(create_table_query)
     if batch_df.count() > 0:
         for row in batch_df.collect():
             jsonified_data = row['jsonified_data']

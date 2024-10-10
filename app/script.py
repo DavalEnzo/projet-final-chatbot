@@ -1,8 +1,5 @@
 #lire mon csv et le stocker dans mon hdfs avec spark
 from pyspark.sql import SparkSession
-from pyhive import hive
-from pyspark.sql.functions import col, avg, date_format, lag
-from pyspark.sql.window import Window
 
 # Create a SparkSession
 spark = SparkSession.builder.appName("myapp").getOrCreate()

@@ -32,7 +32,7 @@ if prompt := st.chat_input("What is up?"):
     # Add user message to chat history
     st.session_state.messages.append({"role": "user", "content": prompt})
 
-    api_url = "http://127.0.0.1:5000/api/data"
+    api_url = "http://backend:5550/api/data"
     api_data = {"message": prompt}
     response = requests.post(api_url, json=api_data, )
         

@@ -85,7 +85,7 @@ def post_data():
             typologie = "vos propos sont approprié"
             value = "0"
 
-        reponse = {'message': typologie, 'value': value}
+        reponse = {'message': typologie, 'value': nouvelle_phrase}
 
         producer.send('topic1', reponse)
         producer.flush()
