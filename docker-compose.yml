@@ -63,7 +63,7 @@ services:
       - "8081:8081"
     environment:
       - "SPARK_MASTER=spark://spark-master:7077"
- 
+
   hive-metastore:
     image: apache/hive:4.0.0
     container_name: hive-metastore
@@ -110,10 +110,21 @@ services:
     container_name: zookeeper
     ports:
       - "2181:2181"
+  front-end:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: front-end
+    ports:
+      - "8501:8501"
+      - "8502:8502"
+    volumes:
+      - ./frontend:/frontend
 
+  
   backend:
     build:
-        context: /backend
+        context: ./backend
         dockerfile: Dockerfile
     container_name: backend
     restart: always
